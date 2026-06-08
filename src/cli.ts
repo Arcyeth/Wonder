@@ -21,6 +21,9 @@ import { getOpenPositions, resolvePosition, type Position } from "./state";
 import { runScreenCycle } from "./screen-cycle";
 import { runManageCycle } from "./manage";
 import { getRecentDecisions } from "./decision-log";
+import { runAgent } from "./agent/loop";
+import { llmAvailable } from "./llm";
+import type { Role } from "./agent/tools";
 import { fmtUsd, fmtPct } from "./util/num";
 import { EXPLORER_URL, CHAIN_ID, NATIVE_SYMBOL, WMON } from "./constants";
 import type { Candidate, Strategy } from "./types";
@@ -28,6 +31,7 @@ import type { Candidate, Strategy } from "./types";
 // ─── arg parsing ─────────────────────────────────────────────────────
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
+  const positionals: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--")) {
@@ -39,8 +43,11 @@ function parseArgs(argv: string[]) {
       } else {
         args[key] = true;
       }
+    } else {
+      positionals.push(a);
     }
   }
+  if (positionals.length) args._goal = positionals.join(" ");
   return args;
 }
 
@@ -409,6 +416,37 @@ function cmdDecisions(args: Record<string, string | boolean>) {
   console.log();
 }
 
+async function cmdAgent(args: Record<string, string | boolean>) {
+  const goal = String(args.goal || args._goal || "").trim();
+  if (!goal) {
+    console.error('Usage: agent "<goal>" [--role screener|manager|general]');
+    process.exit(1);
+  }
+  const roleArg = String(args.role || "general").toUpperCase();
+  const role = (["SCREENER", "MANAGER", "GENERAL"].includes(roleArg) ? roleArg : "GENERAL") as Role;
+
+  if (!llmAvailable()) {
+    console.log(
+      "\n⚠️  No LLM configured. Set LLM_API_KEY (or OPENROUTER_API_KEY) in .env,\n" +
+        "    or LLM_BASE_URL to a local endpoint (e.g. http://localhost:1234/v1),\n" +
+        "    then optionally LLM_MODEL. The deterministic `screen` / `manage` cycles work without an LLM.\n",
+    );
+    process.exit(1);
+  }
+
+  await assertChain();
+  console.log(`\n🤖 Agent [${role}] — ${config.wallet.dryRun ? "DRY_RUN" : "LIVE"}\n   goal: ${goal}\n`);
+  const res = await runAgent({ goal, role });
+  if (args.json) {
+    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    return;
+  }
+  if (res.toolCalls.length) {
+    console.log("   tools used: " + res.toolCalls.map((t) => t.name).join(" → "));
+  }
+  console.log(`\n${res.finalText}\n\n   (${res.steps} step${res.steps === 1 ? "" : "s"})\n`);
+}
+
 function help() {
   console.log(`
 Wonder CLI — LFJ/Monad DLMM agent
@@ -433,10 +471,14 @@ Agent cycles (Phase 3, deterministic; DRY_RUN by default):
   manage [--no-execute] [--json]                               Evaluate open positions & close per rules
   decisions [--limit N] [--json]                               Recent agent decision log
 
+LLM agent (Phase 3b; needs LLM_API_KEY or a local LLM_BASE_URL):
+  agent "<goal>" [--role screener|manager|general] [--json]    ReAct agent over all tools
+
   help                                                         This message
 
 Phase 1 needs no key. Phases 2–3 build & validate txs in DRY_RUN without a key;
 broadcasting (DRY_RUN=false) requires WALLET_PRIVATE_KEY and funds.
+The LLM agent additionally needs an OpenAI-compatible endpoint (OpenRouter/local).
 `);
 }
 
@@ -478,6 +520,9 @@ async function main() {
         break;
       case "decisions":
         cmdDecisions(args);
+        break;
+      case "agent":
+        await cmdAgent(args);
         break;
       case "help":
       case undefined:

@@ -92,6 +92,16 @@ export const config = {
     maxPositions: u.maxPositions ?? 3, // screen cycle won't open beyond this
   },
 
+  // ─── LLM brain (Phase 3b) — provider-agnostic OpenAI-compatible ───
+  llm: {
+    baseUrl: process.env.LLM_BASE_URL || u.llmBaseUrl || "https://openrouter.ai/api/v1",
+    apiKey: process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || u.llmApiKey || "",
+    model: process.env.LLM_MODEL || u.llmModel || "openai/gpt-4o-mini",
+    temperature: u.llmTemperature ?? 0.3,
+    maxTokens: u.llmMaxTokens ?? 2048,
+    maxSteps: u.llmMaxSteps ?? 12,
+  },
+
   log: {
     level: process.env.LOG_LEVEL || u.logLevel || "info",
   },

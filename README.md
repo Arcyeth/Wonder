@@ -111,6 +111,23 @@ rules — **stop-loss** (`pnl% ≤ stopLossPct`), **take-profit** (`pnl% ≥ tak
 and optional **out-of-range** close — then acts (DRY_RUN-aware). Every decision is
 written to `decision-log.json`. These mechanics are what the LLM layer will orchestrate.
 
+## LLM agent (Phase 3b)
+
+A ReAct agent drives the same tools, OpenAI-compatible and provider-agnostic
+(OpenRouter, a local LM Studio endpoint, OpenAI, …). Configure `LLM_BASE_URL`,
+`LLM_API_KEY` (or `OPENROUTER_API_KEY`), and `LLM_MODEL` in `.env`.
+
+```bash
+npm run wonder -- agent "find the best pool and open a small position" --role screener
+npm run wonder -- agent "review my positions and close anything that breached its rules" --role manager
+npm run wonder -- agent "what's my best LP option right now and why?"
+```
+
+The agent calls tools (`get_candidates`, `get_position_pnl`, `run_screen_cycle`,
+`open_position`, `close_position`, …) and is bounded by the same DRY_RUN guard —
+it can't broadcast unless `DRY_RUN=false`. Without an LLM key, the deterministic
+`screen` / `manage` cycles still work.
+
 ## Roadmap
 
 - **Phase 1 ✅** read-only screening.
@@ -119,8 +136,9 @@ written to `decision-log.json`. These mechanics are what the LLM layer will orch
   PnL from LBToken balances per bin.
 - **Phase 3a ✅** deterministic agent cycles: screen → deploy, manage → exit rules,
   decision log.
-- **Phase 3b** LLM brain (ReAct screener + manager) over the same tools; learning/evolution.
-- **Phase 4** Telegram control, cron scheduling, go-live with risk guardrails.
+- **Phase 3b ✅** LLM ReAct agent (screener / manager / general) over the same tools,
+  provider-agnostic (OpenRouter / local / OpenAI).
+- **Phase 4** Telegram control, cron scheduling, learning/evolution, go-live guardrails.
 
 > ⚠️ **Before go-live (`DRY_RUN=false`):** `amountXMin/YMin` on add are set to a flat
 > slippage and on remove to `0` — tighten these (derive from live reserves) and add
