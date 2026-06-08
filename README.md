@@ -77,13 +77,34 @@ npm run pairs
 
 All commands are **read-only**. No transactions are ever sent in Phase 1.
 
+## Lifecycle (Phase 2, DRY_RUN)
+
+```bash
+npm run balance                                  # wallet MON + token balances
+npm run open -- --pool 0x... --amount-x 10 --amount-y 10 --strategy curve --bins-below 4 --bins-above 4
+npm run positions
+npm run pnl -- --position 1
+npm run close -- --position 1
+```
+
+`DRY_RUN=true` (default) builds the exact `addLiquidity`/`removeLiquidity` tx,
+validates its ABI encoding, logs the per-bin allocation, and records the position
+to `state.json` — **without broadcasting**. Set `DRY_RUN=false` + `WALLET_PRIVATE_KEY`
+to go live. PnL is computed on-chain from ERC1155 LBToken balances per bin.
+
 ## Roadmap
 
-- **Phase 1 ✅** read-only screening (this).
-- **Phase 2** position lifecycle in `DRY_RUN`: open/manage/close via LBRouter
-  (`addLiquidity`/`removeLiquidity`), on-chain PnL from ERC1155 LBToken balances per bin.
-- **Phase 3** ReAct LLM agent loop (screener + manager), decision log, learning/evolution.
+- **Phase 1 ✅** read-only screening.
+- **Phase 2 ✅** position lifecycle in `DRY_RUN`: open/close via LBRouter
+  (`addLiquidity`/`removeLiquidity`, spot/curve/bid_ask distributions), on-chain PnL
+  from LBToken balances per bin.
+- **Phase 3** automated manage loop (monitor / rebalance / exit rules) + ReAct LLM
+  agent (screener + manager), decision log, learning/evolution.
 - **Phase 4** Telegram control, cron scheduling, go-live with risk guardrails.
+
+> ⚠️ **Before go-live (DRY_RUN=false):** `amountXMin/YMin` on add are set to a flat
+> slippage and on remove to `0` — tighten these (derive from live reserves) and add
+> per-position approval limits first.
 
 ## Notes & caveats
 

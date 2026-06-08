@@ -67,6 +67,29 @@ export const config = {
     maxPairsToEnrich: u.maxPairsToEnrich ?? 60, // cap on-chain+GoPlus reads per run
   },
 
+  // ─── Wallet / execution (Phase 2) ─────────────────────────────────
+  wallet: {
+    privateKey: process.env.WALLET_PRIVATE_KEY || "",
+    // DRY_RUN default TRUE: build + validate txs but never broadcast.
+    dryRun: (process.env.DRY_RUN ?? String(u.dryRun ?? true)).toLowerCase() !== "false",
+  },
+
+  // ─── Position management (Phase 2) ────────────────────────────────
+  management: {
+    strategy: (u.strategy ?? "spot") as "spot" | "curve" | "bid_ask",
+    binsBelow: u.binsBelow ?? 10, // bins of tokenY below the active bin
+    binsAbove: u.binsAbove ?? 10, // bins of tokenX above the active bin
+    idSlippage: u.idSlippage ?? 5, // max active-id drift tolerated on add
+    amountSlippagePct: u.amountSlippagePct ?? 1, // amountXMin/YMin tolerance
+    deadlineSec: u.deadlineSec ?? 300, // tx deadline window
+    gasReserveMon: u.gasReserveMon ?? 0.5, // native MON kept for gas
+    deployAmountX: u.deployAmountX ?? 0, // default amount of tokenX to deploy (human units)
+    deployAmountY: u.deployAmountY ?? 0, // default amount of tokenY to deploy (human units)
+    // exit rules (used by manage in later phases / informational now)
+    stopLossPct: u.stopLossPct ?? -25,
+    takeProfitPct: u.takeProfitPct ?? 10,
+  },
+
   log: {
     level: process.env.LOG_LEVEL || u.logLevel || "info",
   },

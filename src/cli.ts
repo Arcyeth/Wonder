@@ -8,14 +8,19 @@
  *
  * Or directly:  npx tsx src/cli.ts <command> [flags]
  */
+import { ethers } from "ethers";
 import { config } from "./config";
 import { assertChain } from "./chain/client";
 import { getAllLbPairAddresses } from "./chain/lb";
 import { getPairsByAddresses } from "./data/dexscreener";
 import { getTopCandidates, getPoolDetail } from "./screening";
+import { getBalances, walletAddress } from "./chain/wallet";
+import { openPosition, closePosition } from "./chain/lb-write";
+import { computePositionPnl } from "./data/pnl";
+import { getOpenPositions, resolvePosition, type Position } from "./state";
 import { fmtUsd, fmtPct } from "./util/num";
-import { EXPLORER_URL, CHAIN_ID } from "./constants";
-import type { Candidate } from "./types";
+import { EXPLORER_URL, CHAIN_ID, NATIVE_SYMBOL, WMON } from "./constants";
+import type { Candidate, Strategy } from "./types";
 
 // ─── arg parsing ─────────────────────────────────────────────────────
 function parseArgs(argv: string[]) {
@@ -194,17 +199,160 @@ function serializeOnchain(oc: any) {
   return { ...oc, reserveX: oc.reserveX?.toString?.() ?? oc.reserveX, reserveY: oc.reserveY?.toString?.() ?? oc.reserveY };
 }
 
+async function cmdBalance() {
+  await assertChain();
+  const open = getOpenPositions();
+  const tokens = [...new Set([WMON, ...open.flatMap((p) => [p.tokenX, p.tokenY])])];
+  const { address, native, tokens: bals } = await getBalances(tokens);
+  if (!address) {
+    console.log("\nNo WALLET_PRIVATE_KEY set (keyless dry-run). Balances unavailable.\n");
+    return;
+  }
+  console.log(`\n💰 Wallet ${address}\n`);
+  console.log(`  ${native.toFixed(5)} ${NATIVE_SYMBOL} (native)`);
+  for (const b of bals) console.log(`  ${b.human.toFixed(5)} ${b.symbol}  (${b.token})`);
+  console.log();
+}
+
+async function cmdOpen(args: Record<string, string | boolean>) {
+  const pool = args.pool ? String(args.pool) : "";
+  if (!pool) {
+    console.error("Usage: open --pool 0x... [--amount-x N] [--amount-y N] [--strategy spot|curve|bid_ask] [--bins-below N] [--bins-above N]");
+    process.exit(1);
+  }
+  await assertChain();
+  const amountX = args["amount-x"] != null ? Number(args["amount-x"]) : config.management.deployAmountX;
+  const amountY = args["amount-y"] != null ? Number(args["amount-y"]) : config.management.deployAmountY;
+  const strategy = (args.strategy ? String(args.strategy) : config.management.strategy) as Strategy;
+  const binsBelow = args["bins-below"] != null ? Number(args["bins-below"]) : undefined;
+  const binsAbove = args["bins-above"] != null ? Number(args["bins-above"]) : undefined;
+
+  const res = await openPosition({ pool, amountX, amountY, strategy, binsBelow, binsAbove });
+  if (args.json) {
+    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    return;
+  }
+
+  const p = res.position;
+  const mode = res.dryRun ? "🧪 DRY_RUN" : "🚀 LIVE";
+  console.log(`\n${mode} open — ${p.name}  (${p.strategy})\n`);
+  console.log(`  Pool        : ${p.pool}`);
+  console.log(`  binStep     : ${p.binStep} | activeId ${p.activeIdAtDeploy}`);
+  console.log(`  Range       : bins ${Math.min(...p.binIds)}..${Math.max(...p.binIds)} (${p.binIds.length} bins, Δ ${Math.min(...p.deltaIds)}..${Math.max(...p.deltaIds)})`);
+  console.log(`  Deposit     : ${p.amountXHuman} ${p.symbolX} + ${p.amountYHuman} ${p.symbolY}  ≈ ${fmtUsd(p.depositValueUsd)}`);
+  console.log(`  Encoding    : ${res.encodedOk ? "valid ✓" : "INVALID ✗"} (addLiquidity)`);
+  // Per-bin allocation preview (first 3 + last 3).
+  const fmtBin = (b: { id: number; deltaId: number; amountX: string; amountY: string }) =>
+    `    Δ${String(b.deltaId).padStart(3)} (id ${b.id}): ${ethers.formatUnits(b.amountX, p.decimalsX)} ${p.symbolX} / ${ethers.formatUnits(b.amountY, p.decimalsY)} ${p.symbolY}`;
+  console.log("  Allocation  :");
+  const preview = res.perBin.length <= 6 ? res.perBin : [...res.perBin.slice(0, 3), null, ...res.perBin.slice(-3)];
+  for (const b of preview) console.log(b ? fmtBin(b) : "      …");
+  console.log(`\n  ${res.note}`);
+  console.log(`  Position id : ${p.id}\n`);
+}
+
+async function cmdPositions(args: Record<string, string | boolean>) {
+  const open = getOpenPositions();
+  if (args.json) {
+    process.stdout.write(JSON.stringify(open, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n📌 ${open.length} open position(s)\n`);
+  if (open.length === 0) {
+    console.log("  (none) — open one with:  npm run open -- --pool 0x... --amount-y 5\n");
+    return;
+  }
+  open.forEach((p, i) => {
+    const range = `${Math.min(...p.binIds)}..${Math.max(...p.binIds)}`;
+    console.log(
+      `  ${String(i + 1).padEnd(3)} ${p.name.padEnd(14)} ${p.strategy.padEnd(8)} binStep ${String(p.binStep).padEnd(4)} bins ${range.padEnd(20)} ${fmtUsd(p.depositValueUsd).padEnd(9)} ${p.dryRun ? "🧪dry" : "live"}`,
+    );
+    console.log(`        id=${p.id}`);
+  });
+  console.log();
+}
+
+async function cmdPnl(args: Record<string, string | boolean>) {
+  await assertChain();
+  const targets: Position[] = args.position
+    ? [resolvePosition(String(args.position))].filter((x): x is Position => x != null)
+    : getOpenPositions();
+  if (targets.length === 0) {
+    console.log("\nNo matching open position(s).\n");
+    return;
+  }
+  if (!walletAddress()) {
+    console.log("\n⚠️  No WALLET_PRIVATE_KEY — on-chain PnL needs the position owner address. Showing deposit only.\n");
+  }
+  const results = [];
+  for (const p of targets) {
+    const pnl = await computePositionPnl(p);
+    results.push({ name: p.name, ...pnl });
+  }
+  if (args.json) {
+    process.stdout.write(JSON.stringify(results, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n📈 PnL\n`);
+  for (const r of results) {
+    console.log(`  ${r.name}  (${r.positionId})`);
+    if (!r.hasOnchainLiquidity) {
+      console.log(`    no on-chain liquidity (simulated/dry or closed). deposit ≈ ${fmtUsd(r.depositValueUsd)}\n`);
+      continue;
+    }
+    console.log(`    holdings  : ${r.currentXHuman.toFixed(4)} X + ${r.currentYHuman.toFixed(4)} Y across ${r.binsWithLiquidity} bin(s)`);
+    console.log(`    value     : ${fmtUsd(r.currentValueUsd)}  (deposit ${fmtUsd(r.depositValueUsd)})`);
+    console.log(`    PnL       : ${fmtUsd(r.pnlUsd)}  ${r.pnlPct != null ? fmtPct(r.pnlPct) : ""}`);
+    console.log(`    in range  : ${r.inRange ?? "unknown"}\n`);
+  }
+}
+
+async function cmdClose(args: Record<string, string | boolean>) {
+  const ref = args.position ? String(args.position) : "";
+  if (!ref) {
+    console.error("Usage: close --position <id|poolAddress|index>");
+    process.exit(1);
+  }
+  const p = resolvePosition(ref);
+  if (!p) {
+    console.log(`No open position matching "${ref}".`);
+    return;
+  }
+  await assertChain();
+  const res = await closePosition(p);
+  if (args.json) {
+    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    return;
+  }
+  const mode = res.dryRun ? "🧪 DRY_RUN" : "🚀 LIVE";
+  console.log(`\n${mode} close — ${p.name} (${res.positionId})\n`);
+  console.log(`  Bins burned : ${res.ids.length}${res.hasOnchainLiquidity ? "" : " (no on-chain balance)"}`);
+  console.log(`  Encoding    : ${res.encodedOk ? "valid ✓" : "INVALID ✗"} (removeLiquidity)`);
+  console.log(`  ${res.note}\n`);
+}
+
 function help() {
   console.log(`
-Wonder CLI — Phase 1 (read-only LFJ/Monad DLMM screening)
+Wonder CLI — LFJ/Monad DLMM agent
 
-Commands:
+Screening (Phase 1, read-only):
   candidates [--limit N] [--timeframe h24|h6|h1|m5] [--json]   Rank LP candidates
   pool-detail --pool 0x... [--timeframe ..] [--json]            Deep dive one pool
   pairs                                                         List all LFJ LBPairs
-  help                                                          This message
 
-No private key needed. No transactions are ever sent in Phase 1.
+Lifecycle (Phase 2, DRY_RUN by default — set DRY_RUN=false to broadcast):
+  balance                                                      Wallet MON + token balances
+  open --pool 0x... [--amount-x N] [--amount-y N]
+       [--strategy spot|curve|bid_ask] [--bins-below N] [--bins-above N] [--json]
+                                                               Build & record an LP position
+  positions [--json]                                           List open positions
+  pnl [--position <id|pool|index>] [--json]                    On-chain PnL of position(s)
+  close --position <id|pool|index> [--json]                    Remove liquidity / close
+
+  help                                                         This message
+
+Phase 1 needs no key. Phase 2 builds & validates txs in DRY_RUN without a key;
+broadcasting (DRY_RUN=false) requires WALLET_PRIVATE_KEY and funds.
 `);
 }
 
@@ -222,6 +370,21 @@ async function main() {
         break;
       case "pairs":
         await cmdPairs();
+        break;
+      case "balance":
+        await cmdBalance();
+        break;
+      case "open":
+        await cmdOpen(args);
+        break;
+      case "positions":
+        await cmdPositions(args);
+        break;
+      case "pnl":
+        await cmdPnl(args);
+        break;
+      case "close":
+        await cmdClose(args);
         break;
       case "help":
       case undefined:

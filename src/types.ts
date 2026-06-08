@@ -1,4 +1,7 @@
-/** Shared types for Wonder Phase 1 (read-only screening). */
+/** Shared types for Wonder. */
+
+/** LB liquidity distribution shapes. */
+export type Strategy = "spot" | "curve" | "bid_ask";
 
 /** On-chain reads from a single LFJ LBPair (Liquidity Book) contract. */
 export interface LbPairOnchain {

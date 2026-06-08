@@ -123,6 +123,43 @@ export async function readPair(pairAddress: string): Promise<LbPairOnchain> {
   };
 }
 
+// ─── position (LBToken) reads ────────────────────────────────────────
+
+export interface BinLiquidity {
+  id: number;
+  balance: bigint; // owner's LBToken shares in this bin
+  totalSupply: bigint; // total LBToken shares in this bin
+  binReserveX: bigint;
+  binReserveY: bigint;
+  userX: bigint; // owner's share of reserveX (includes accrued fees)
+  userY: bigint;
+}
+
+/** Read an owner's liquidity across the given bin ids of a pool. */
+export async function readPositionLiquidity(
+  pool: string,
+  owner: string,
+  ids: number[],
+): Promise<BinLiquidity[]> {
+  if (ids.length === 0) return [];
+  const pair = new ethers.Contract(pool, LB_PAIR_ABI, getProvider());
+  const accounts = ids.map(() => owner);
+  const [balances, supplies, bins] = await Promise.all([
+    pair.balanceOfBatch(accounts, ids) as Promise<bigint[]>,
+    pMap(ids, (id) => pair.totalSupply(id) as Promise<bigint>, 6),
+    pMap(ids, (id) => pair.getBin(id) as Promise<[bigint, bigint]>, 6),
+  ]);
+  return ids.map((id, i) => {
+    const balance = balances[i];
+    const totalSupply = supplies[i];
+    const binReserveX = bins[i][0];
+    const binReserveY = bins[i][1];
+    const userX = totalSupply > 0n ? (balance * binReserveX) / totalSupply : 0n;
+    const userY = totalSupply > 0n ? (balance * binReserveY) / totalSupply : 0n;
+    return { id, balance, totalSupply, binReserveX, binReserveY, userX, userY };
+  });
+}
+
 /** Read many pairs with bounded concurrency; failures resolve to null. */
 export async function readPairs(
   addresses: string[],
