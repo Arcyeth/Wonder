@@ -1,0 +1,30 @@
+{
+  "_comment": "Copy to user-config.json and tune. All keys optional; defaults live in src/config.ts. Thresholds are calibrated loose for Monad's early LFJ ecosystem.",
+
+  "rpcUrl": "https://rpc.monad.xyz",
+  "goplusChainId": "143",
+  "goplusEnabled": true,
+
+  "timeframe": "h24",
+  "minTvl": 2000,
+  "maxTvl": null,
+  "minVolume": 500,
+  "minFeeTvlRatio": 0.0,
+  "minHolders": 30,
+  "minMcap": 10000,
+  "maxMcap": 100000000,
+  "minBinStep": 1,
+  "maxBinStep": 300,
+  "minOrganicProxy": 0,
+
+  "rejectHoneypot": true,
+  "maxBuyTaxPct": 10,
+  "maxSellTaxPct": 10,
+  "maxTop10Pct": 90,
+  "requireOpenSource": false,
+  "minAgeHours": null,
+  "maxAgeHours": null,
+
+  "maxPairsToEnrich": 60,
+  "logLevel": "info"
+}

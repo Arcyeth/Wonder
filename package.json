@@ -1,0 +1,29 @@
+{
+  "name": "wonder",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Wonder — autonomous DLMM/LP agent for LFJ Liquidity Book on Monad (Phase 1: read-only screening)",
+  "main": "src/cli.ts",
+  "bin": {
+    "wonder": "src/cli.ts"
+  },
+  "scripts": {
+    "wonder": "tsx src/cli.ts",
+    "candidates": "tsx src/cli.ts candidates",
+    "pairs": "tsx src/cli.ts pairs",
+    "pool-detail": "tsx src/cli.ts pool-detail",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^17.0.0",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

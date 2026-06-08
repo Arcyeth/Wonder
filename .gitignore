@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+dist/
+
+# secrets & local config
+.env
+.env.*
+!.env.example
+user-config.json
+
+# runtime state (Phase 2+)
+state.json
+lessons.json
+pool-memory.json
+decision-log.json
+logs/
+.cache/
+
+# reference clone (read-only blueprint, not part of Wonder)
+.reference/
+
+# raw research data dumps (reproducible from DefiLlama/explorer APIs — kept local)
+*.dump.json
+chains.json
+dexs_monad.json
+protocols.json
+monad_wb.html
+
+# local harness settings
+.claude/settings.local.json
+
+# OS
+Thumbs.db
+.DS_Store
