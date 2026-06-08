@@ -7,7 +7,7 @@
  * are the per-bin fractions (1e18 precision) of each token's total amount;
  * each side must sum to exactly 1e18 (when that side has a non-zero amount).
  *
- * Strategy shapes (matching the LFJ/Meteora SDK semantics):
+ * Strategy shapes (standard Liquidity Book distribution semantics):
  *   - spot    : uniform weight across the side's bins
  *   - curve   : weight concentrated at the active bin, tapering to the edges
  *   - bid_ask : weight concentrated at the edges (V-shape), light at center

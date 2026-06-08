@@ -1,8 +1,7 @@
 /**
  * Wonder screening engine (Phase 1, read-only).
  *
- * Pipeline (mirrors Meridian's discover → hard-filter → enrich → score, but
- * sourced for Monad/LFJ):
+ * Pipeline (discover → hard-filter → enrich → score, sourced for Monad/LFJ):
  *   1. enumerate LBPairs on-chain (LBFactory)            — authoritative list
  *   2. DexScreener metrics for all pairs                 — TVL/volume/mcap/price
  *   3. cheap pre-filter (TVL/volume/mcap) → shortlist    — limit heavy reads
@@ -10,13 +9,13 @@
  *   5. GoPlus security for shortlist base tokens         — honeypot/holders/top10
  *   6. compute feeTvlRatio + organicProxy, hard-filter, score, sort
  *
- * Scoring mirrors Meridian: feeTvl*1000 + organic*10 + volume/100 + holders/100.
+ * Scoring: feeTvl*1000 + organic*10 + volume/100 + holders/100.
  */
 import { config, type Timeframe } from "./config";
 import { getAllLbPairAddresses, readPairs, readPair } from "./chain/lb";
 import { getPairsByAddresses, getPair } from "./data/dexscreener";
 import { getTokenSecurityBatch, getTokenSecurity } from "./data/goplus";
-import { numeric, round, fix } from "./util/num";
+import { round, fix } from "./util/num";
 import { log } from "./util/log";
 import type {
   Candidate,
@@ -33,7 +32,7 @@ function windowVolume(dex: DexPair, tf: Timeframe): number {
   return dex.volume[tf] ?? 0;
 }
 
-/** 0-100 synthesized "organic" proxy (no Jupiter organic-score on Monad). */
+/** 0-100 synthesized organic-activity proxy (buy/sell balance + volume + holders). */
 function organicProxy(dex: DexPair, tf: Timeframe, holders: number | null): number {
   const buys = dex.txns[tf]?.buys ?? 0;
   const sells = dex.txns[tf]?.sells ?? 0;

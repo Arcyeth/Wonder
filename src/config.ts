@@ -2,9 +2,8 @@
  * Wonder config — loads .env + user-config.json into a single `config` object.
  *
  * Screening thresholds are deliberately calibrated LOOSE for Monad's early
- * LFJ ecosystem (total LFJ TVL ~$3.4M as of mid-2026), unlike Meridian's
- * Solana/Meteora defaults (minTvl $10k, minHolders 500) which would filter
- * out essentially every Monad pool. Tune via user-config.json.
+ * LFJ ecosystem (total LFJ TVL ~$3.4M as of mid-2026); aggressive defaults
+ * would filter out essentially every Monad pool. Tune via user-config.json.
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -1,9 +1,9 @@
 /**
  * Position valuation & PnL.
  *
- * There is no Meteora-style PnL API on Monad, so value is computed on-chain:
- * the owner's share of each bin's reserves (which already includes accrued
- * fees) is summed and priced in USD via DexScreener.
+ * Position value is computed directly on-chain: the owner's share of each bin's
+ * reserves (which already includes accrued fees) is summed and priced in USD
+ * via DexScreener.
  */
 import { ethers } from "ethers";
 import { readPositionLiquidity } from "../chain/lb";

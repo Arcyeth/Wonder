@@ -1,5 +1,5 @@
 /**
- * GoPlus token-security client (replaces Jupiter token audit on Solana).
+ * GoPlus token-security client (honeypot / holders / tax / concentration).
  * GoPlus supports Monad; chain_id is configurable (mainnet 143, testnet 10143).
  *
  * Endpoint: GET /token_security/{chain_id}?contract_addresses={a,b,...}

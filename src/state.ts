@@ -1,6 +1,6 @@
 /**
- * Position registry — JSON store at repo root (no DB), mirroring Meridian's
- * file-based state. Bigints are persisted as strings.
+ * Position registry — JSON store at repo root (no DB).
+ * Bigints are persisted as strings.
  */
 import fs from "node:fs";
 import path from "node:path";

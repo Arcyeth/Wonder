@@ -1,6 +1,6 @@
 /**
- * DexScreener client — metrics for Monad pairs (replaces Meteora screening API
- * + Jupiter price). LFJ pools surface under dexId "traderjoe" on chain "monad".
+ * DexScreener client — metrics for Monad pairs (TVL/volume/mcap/price).
+ * LFJ pools surface under dexId "traderjoe" on chain "monad".
  *
  * Endpoint: GET /latest/dex/pairs/{chainId}/{comma-separated pairAddresses}
  * (max 30 addresses per call).
