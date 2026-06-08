@@ -84,9 +84,12 @@ export const config = {
     gasReserveMon: u.gasReserveMon ?? 0.5, // native MON kept for gas
     deployAmountX: u.deployAmountX ?? 0, // default amount of tokenX to deploy (human units)
     deployAmountY: u.deployAmountY ?? 0, // default amount of tokenY to deploy (human units)
-    // exit rules (used by manage in later phases / informational now)
-    stopLossPct: u.stopLossPct ?? -25,
-    takeProfitPct: u.takeProfitPct ?? 10,
+    // exit rules (manage cycle)
+    stopLossPct: u.stopLossPct ?? -25, // close if pnl% <= this
+    takeProfitPct: u.takeProfitPct ?? 10, // close if pnl% >= this
+    closeOnOutOfRange: u.closeOnOutOfRange ?? false, // close when active bin leaves the range
+    minClaimUsd: u.minClaimUsd ?? 1, // (informational) min unclaimed fees worth acting on
+    maxPositions: u.maxPositions ?? 3, // screen cycle won't open beyond this
   },
 
   log: {

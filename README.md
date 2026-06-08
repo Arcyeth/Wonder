@@ -95,14 +95,31 @@ validates its ABI encoding, logs the per-bin allocation, and records the positio
 to `state.json` — **without broadcasting**. Set `DRY_RUN=false` + `WALLET_PRIVATE_KEY`
 to go live. PnL is computed on-chain from ERC1155 LBToken balances per bin.
 
+## Agent cycles (deterministic, DRY_RUN by default)
+
+```bash
+npm run screen                                   # rank candidates, select top pick
+npm run screen -- --deploy --amount-y 5          # auto-open the top pick (dry-run)
+npm run manage                                   # evaluate open positions, close per rules
+npm run manage -- --no-execute                   # evaluate only, don't close
+npm run decisions                                # recent agent decision log
+```
+
+The **screen cycle** ranks pools, drops ones already held, and (optionally) opens the
+top pick. The **manage cycle** reads each position's on-chain PnL and applies hard exit
+rules — **stop-loss** (`pnl% ≤ stopLossPct`), **take-profit** (`pnl% ≥ takeProfitPct`),
+and optional **out-of-range** close — then acts (DRY_RUN-aware). Every decision is
+written to `decision-log.json`. These mechanics are what the LLM layer will orchestrate.
+
 ## Roadmap
 
 - **Phase 1 ✅** read-only screening.
 - **Phase 2 ✅** position lifecycle in `DRY_RUN`: open/close via LBRouter
   (`addLiquidity` / `removeLiquidity`, spot/curve/bid_ask distributions), on-chain
   PnL from LBToken balances per bin.
-- **Phase 3** automated manage loop (monitor / rebalance / exit rules) + autonomous
-  LLM agent (screener + manager), decision log, learning/evolution.
+- **Phase 3a ✅** deterministic agent cycles: screen → deploy, manage → exit rules,
+  decision log.
+- **Phase 3b** LLM brain (ReAct screener + manager) over the same tools; learning/evolution.
 - **Phase 4** Telegram control, cron scheduling, go-live with risk guardrails.
 
 > ⚠️ **Before go-live (`DRY_RUN=false`):** `amountXMin/YMin` on add are set to a flat

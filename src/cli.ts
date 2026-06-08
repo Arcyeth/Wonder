@@ -18,6 +18,9 @@ import { getBalances, walletAddress } from "./chain/wallet";
 import { openPosition, closePosition } from "./chain/lb-write";
 import { computePositionPnl } from "./data/pnl";
 import { getOpenPositions, resolvePosition, type Position } from "./state";
+import { runScreenCycle } from "./screen-cycle";
+import { runManageCycle } from "./manage";
+import { getRecentDecisions } from "./decision-log";
 import { fmtUsd, fmtPct } from "./util/num";
 import { EXPLORER_URL, CHAIN_ID, NATIVE_SYMBOL, WMON } from "./constants";
 import type { Candidate, Strategy } from "./types";
@@ -331,6 +334,81 @@ async function cmdClose(args: Record<string, string | boolean>) {
   console.log(`  ${res.note}\n`);
 }
 
+async function cmdScreen(args: Record<string, string | boolean>) {
+  await assertChain();
+  const deploy = Boolean(args.deploy);
+  const limit = args.limit != null ? Number(args.limit) : 10;
+  const amountX = args["amount-x"] != null ? Number(args["amount-x"]) : undefined;
+  const amountY = args["amount-y"] != null ? Number(args["amount-y"]) : undefined;
+  const res = await runScreenCycle({ deploy, amountX, amountY, limit });
+  if (args.json) {
+    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n🔁 Screen cycle — ${config.wallet.dryRun ? "DRY_RUN" : "LIVE"}\n`);
+  if (!res.picked) {
+    console.log(`  No deploy: ${res.reason}\n`);
+    return;
+  }
+  const p = res.picked;
+  console.log(`  Pick    : ${p.name}  (score ${p.score.toFixed(1)}, binStep ${p.binStep}, TVL ${fmtUsd(p.tvlUsd)})`);
+  console.log(`  Pool    : ${p.pool}`);
+  if (res.deployed && res.openResult) {
+    console.log(`  Deployed: ${res.openResult.position.binIds.length} bins ≈ ${fmtUsd(res.openResult.position.depositValueUsd)}`);
+    console.log(`  ${res.openResult.note}`);
+    console.log(`  Position: ${res.openResult.position.id}`);
+  } else {
+    console.log(`  Action  : ${res.reason}`);
+    console.log(`  (run with --deploy --amount-y <n> to open)`);
+  }
+  console.log();
+}
+
+async function cmdManage(args: Record<string, string | boolean>) {
+  await assertChain();
+  const execute = !args["no-execute"];
+  const res = await runManageCycle({ execute });
+  if (args.json) {
+    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n🛠️  Manage cycle — ${config.wallet.dryRun ? "DRY_RUN" : "LIVE"}${execute ? "" : " (evaluate-only)"}\n`);
+  if (!res.walletPresent) {
+    console.log("  ⚠️  No WALLET_PRIVATE_KEY — on-chain PnL can't be read, so positions can't be evaluated.\n");
+  }
+  if (res.evaluated === 0) {
+    console.log("  No open positions.\n");
+    return;
+  }
+  for (const o of res.outcomes) {
+    const tag = o.action.kind === "CLOSE" ? "🔴 CLOSE" : "🟢 STAY";
+    const pnl = o.pnl.pnlPct != null ? fmtPct(o.pnl.pnlPct) : "n/a";
+    console.log(`  ${tag}  ${o.position.name.padEnd(14)} pnl ${pnl.padEnd(8)} — ${o.action.reason}`);
+    if (o.executed) console.log(`         ↳ ${o.note}`);
+  }
+  console.log(`\n  Evaluated ${res.evaluated}, closed ${res.closed}, stayed ${res.stayed}.\n`);
+}
+
+function cmdDecisions(args: Record<string, string | boolean>) {
+  const limit = args.limit != null ? Number(args.limit) : 20;
+  const decisions = getRecentDecisions(limit);
+  if (args.json) {
+    process.stdout.write(JSON.stringify(decisions, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n🧾 Recent decisions (${decisions.length})\n`);
+  if (decisions.length === 0) {
+    console.log("  (none yet — run `screen` or `manage`)\n");
+    return;
+  }
+  for (const d of decisions) {
+    const when = new Date(d.ts).toISOString().slice(5, 16).replace("T", " ");
+    console.log(`  ${when}  [${d.actor}] ${d.type.padEnd(13)} ${d.name ?? "—"}`);
+    console.log(`            ${d.reason}`);
+  }
+  console.log();
+}
+
 function help() {
   console.log(`
 Wonder CLI — LFJ/Monad DLMM agent
@@ -349,9 +427,15 @@ Lifecycle (Phase 2, DRY_RUN by default — set DRY_RUN=false to broadcast):
   pnl [--position <id|pool|index>] [--json]                    On-chain PnL of position(s)
   close --position <id|pool|index> [--json]                    Remove liquidity / close
 
+Agent cycles (Phase 3, deterministic; DRY_RUN by default):
+  screen [--deploy] [--amount-x N] [--amount-y N] [--limit N] [--json]
+                                                               Rank + (optionally) auto-open top pick
+  manage [--no-execute] [--json]                               Evaluate open positions & close per rules
+  decisions [--limit N] [--json]                               Recent agent decision log
+
   help                                                         This message
 
-Phase 1 needs no key. Phase 2 builds & validates txs in DRY_RUN without a key;
+Phase 1 needs no key. Phases 2–3 build & validate txs in DRY_RUN without a key;
 broadcasting (DRY_RUN=false) requires WALLET_PRIVATE_KEY and funds.
 `);
 }
@@ -385,6 +469,15 @@ async function main() {
         break;
       case "close":
         await cmdClose(args);
+        break;
+      case "screen":
+        await cmdScreen(args);
+        break;
+      case "manage":
+        await cmdManage(args);
+        break;
+      case "decisions":
+        cmdDecisions(args);
         break;
       case "help":
       case undefined:
