@@ -92,6 +92,14 @@ export const config = {
     maxPositions: u.maxPositions ?? 3, // screen cycle won't open beyond this
   },
 
+  // ─── Scheduler (Phase 4) ──────────────────────────────────────────
+  schedule: {
+    managementIntervalMin: u.managementIntervalMin ?? 10,
+    screeningIntervalMin: u.screeningIntervalMin ?? 30,
+    autoDeploy: u.autoDeploy ?? false, // daemon auto-opens the top pick each screen
+    evolveEveryCloses: u.evolveEveryCloses ?? 5, // re-tune thresholds every N closes
+  },
+
   // ─── LLM brain (Phase 3b) — provider-agnostic OpenAI-compatible ───
   llm: {
     baseUrl: process.env.LLM_BASE_URL || u.llmBaseUrl || "https://openrouter.ai/api/v1",

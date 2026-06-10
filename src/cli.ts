@@ -24,6 +24,8 @@ import { getRecentDecisions } from "./decision-log";
 import { runAgent } from "./agent/loop";
 import { llmAvailable } from "./llm";
 import type { Role } from "./agent/tools";
+import { recordClose, getLessons, getPerformanceSummary } from "./lessons";
+import { runDaemon } from "./daemon";
 import { fmtUsd, fmtPct } from "./util/num";
 import { EXPLORER_URL, CHAIN_ID, NATIVE_SYMBOL, WMON } from "./constants";
 import type { Candidate, Strategy } from "./types";
@@ -329,7 +331,9 @@ async function cmdClose(args: Record<string, string | boolean>) {
     return;
   }
   await assertChain();
+  const pnl = await computePositionPnl(p); // capture before liquidity is removed
   const res = await closePosition(p);
+  recordClose(p, pnl, "manual close");
   if (args.json) {
     process.stdout.write(JSON.stringify(res, null, 2) + "\n");
     return;
@@ -447,6 +451,37 @@ async function cmdAgent(args: Record<string, string | boolean>) {
   console.log(`\n${res.finalText}\n\n   (${res.steps} step${res.steps === 1 ? "" : "s"})\n`);
 }
 
+async function cmdStart(args: Record<string, string | boolean>) {
+  await runDaemon({ once: Boolean(args.once), deploy: Boolean(args.deploy) });
+}
+
+function cmdLessons(args: Record<string, string | boolean>) {
+  const lessons = getLessons();
+  const perf = getPerformanceSummary();
+  if (args.json) {
+    process.stdout.write(JSON.stringify({ summary: perf, lessons }, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n📚 Lessons (${lessons.length})\n`);
+  if (lessons.length === 0) console.log("  (none yet — lessons accrue as positions close)");
+  for (const l of lessons) console.log(`  ${l.kind.padEnd(7)} ${l.text}`);
+  console.log(`\n  Performance: ${perf.closes} closes, ${perf.evaluated} evaluated, win ${perf.winRatePct != null ? perf.winRatePct.toFixed(0) + "%" : "—"}, avg ${perf.avgPnlPct != null ? perf.avgPnlPct.toFixed(1) + "%" : "—"}\n`);
+}
+
+function cmdPerformance(args: Record<string, string | boolean>) {
+  const perf = getPerformanceSummary();
+  if (args.json) {
+    process.stdout.write(JSON.stringify(perf, null, 2) + "\n");
+    return;
+  }
+  console.log(`\n📊 Performance\n`);
+  console.log(`  closes      : ${perf.closes}`);
+  console.log(`  evaluated   : ${perf.evaluated} (with on-chain PnL)`);
+  console.log(`  wins        : ${perf.wins}`);
+  console.log(`  win rate    : ${perf.winRatePct != null ? perf.winRatePct.toFixed(1) + "%" : "—"}`);
+  console.log(`  avg PnL     : ${perf.avgPnlPct != null ? perf.avgPnlPct.toFixed(2) + "%" : "—"}\n`);
+}
+
 function help() {
   console.log(`
 Wonder CLI — LFJ/Monad DLMM agent
@@ -473,6 +508,11 @@ Agent cycles (Phase 3, deterministic; DRY_RUN by default):
 
 LLM agent (Phase 3b; needs LLM_API_KEY or a local LLM_BASE_URL):
   agent "<goal>" [--role screener|manager|general] [--json]    ReAct agent over all tools
+
+Autonomous runtime + learning (Phase 4):
+  start [--once] [--deploy]                                    Run the daemon (manage + screen loops)
+  lessons [--json]                                             Lessons learned from closed positions
+  performance [--json]                                         Win rate / avg PnL summary
 
   help                                                         This message
 
@@ -523,6 +563,15 @@ async function main() {
         break;
       case "agent":
         await cmdAgent(args);
+        break;
+      case "start":
+        await cmdStart(args);
+        break;
+      case "lessons":
+        cmdLessons(args);
+        break;
+      case "performance":
+        cmdPerformance(args);
         break;
       case "help":
       case undefined:

@@ -128,6 +128,21 @@ The agent calls tools (`get_candidates`, `get_position_pnl`, `run_screen_cycle`,
 it can't broadcast unless `DRY_RUN=false`. Without an LLM key, the deterministic
 `screen` / `manage` cycles still work.
 
+## Autonomous runtime + learning (Phase 4a)
+
+```bash
+npm run wonder -- start --once                   # one manage + screen pass (good for cron/testing)
+npm run wonder -- start --deploy                 # run forever: manage every Nm, screen every Mm
+npm run wonder -- lessons                        # what it learned from closed positions
+npm run wonder -- performance                    # win rate / avg PnL
+```
+
+The **daemon** runs the manage cycle every `managementIntervalMin` and the screen cycle
+every `screeningIntervalMin` (busy-guarded, DRY_RUN-aware, graceful shutdown). On every
+close, the **learning engine** records performance and re-derives concise lessons
+(`PREFER`/`AVOID` by strategy and bin step), and every `evolveEveryCloses` closes it
+conservatively evolves a screening threshold and notes why.
+
 ## Roadmap
 
 - **Phase 1 ✅** read-only screening.
@@ -138,7 +153,8 @@ it can't broadcast unless `DRY_RUN=false`. Without an LLM key, the deterministic
   decision log.
 - **Phase 3b ✅** LLM ReAct agent (screener / manager / general) over the same tools,
   provider-agnostic (OpenRouter / local / OpenAI).
-- **Phase 4** Telegram control, cron scheduling, learning/evolution, go-live guardrails.
+- **Phase 4a ✅** autonomous daemon (manage + screen loops) + learning/evolution.
+- **Phase 4b** Telegram control (notifications + commands), then go-live guardrails.
 
 > ⚠️ **Before go-live (`DRY_RUN=false`):** `amountXMin/YMin` on add are set to a flat
 > slippage and on remove to `0` — tighten these (derive from live reserves) and add

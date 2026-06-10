@@ -11,6 +11,7 @@ import { getOpenPositions, type Position } from "./state";
 import { computePositionPnl, type PositionPnl } from "./data/pnl";
 import { closePosition } from "./chain/lb-write";
 import { appendDecision } from "./decision-log";
+import { recordClose } from "./lessons";
 import { walletAddress } from "./chain/wallet";
 import { log } from "./util/log";
 
@@ -86,6 +87,7 @@ export async function runManageCycle(opts: { execute?: boolean } = {}): Promise<
           reason: action.reason,
           metrics: { pnlPct: pnl.pnlPct, pnlUsd: pnl.pnlUsd, valueUsd: pnl.currentValueUsd, dryRun: res.dryRun },
         });
+        recordClose(p, pnl, action.reason);
         closed++;
         log.info("manage", `CLOSE ${p.name}: ${action.reason}`);
       } else {
