@@ -8,6 +8,7 @@ import { config } from "./config";
 import { runScreenCycle } from "./screen-cycle";
 import { runManageCycle } from "./manage";
 import { assertChain } from "./chain/client";
+import { notify, telegramAvailable, startTelegram } from "./telegram";
 import { log } from "./util/log";
 
 let _manageBusy = false;
@@ -22,6 +23,10 @@ async function manageTick(): Promise<void> {
   try {
     const r = await runManageCycle({ execute: true });
     log.info("daemon", `manage: evaluated ${r.evaluated}, closed ${r.closed}, stayed ${r.stayed}`);
+    if (r.closed > 0) {
+      const names = r.outcomes.filter((o) => o.executed).map((o) => o.position.name).join(", ");
+      notify(`🛠️ Manage: closed ${r.closed} — ${names}`);
+    }
   } catch (e) {
     log.error("daemon", `manage failed: ${(e as Error).message}`);
   } finally {
@@ -43,6 +48,9 @@ async function screenTick(deploy: boolean): Promise<void> {
         ? `screen: pick ${r.picked.name}${r.deployed ? " (deployed)" : " (not deployed)"}`
         : `screen: no deploy (${r.reason})`,
     );
+    if (r.deployed && r.picked) {
+      notify(`🟢 Deployed ${r.picked.name} ≈${r.openResult?.position.depositValueUsd != null ? "$" + r.openResult.position.depositValueUsd.toFixed(2) : "?"}${config.wallet.dryRun ? " (dry)" : ""}`);
+    }
   } catch (e) {
     log.error("daemon", `screen failed: ${(e as Error).message}`);
   } finally {
@@ -63,6 +71,9 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<void> {
     "daemon",
     `start — ${config.wallet.dryRun ? "DRY_RUN" : "LIVE"} | manage ${s.managementIntervalMin}m | screen ${s.screeningIntervalMin}m | autoDeploy ${deploy}`,
   );
+  notify(`🚀 Wonder daemon started (${config.wallet.dryRun ? "DRY_RUN" : "LIVE"}, autoDeploy ${deploy})`);
+  // Telegram control bot runs alongside the loops (no-op without a token).
+  if (telegramAvailable() && !opts.once) void startTelegram();
 
   // Initial pass: manage first (protect), then screen (deploy).
   await manageTick();

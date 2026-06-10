@@ -143,6 +143,23 @@ close, the **learning engine** records performance and re-derives concise lesson
 (`PREFER`/`AVOID` by strategy and bin step), and every `evolveEveryCloses` closes it
 conservatively evolves a screening threshold and notes why.
 
+## Telegram control (Phase 4b)
+
+Set `TELEGRAM_BOT_TOKEN` (from @BotFather), `TELEGRAM_CHAT_ID`, and optionally
+`TELEGRAM_ALLOWED_USER_IDS` in `.env`. The daemon then sends notifications
+(deploys, closes) and runs a command bot:
+
+```
+/status  /positions  /pnl  /screen  /manage  /close <id|pool|index>  /lessons  /performance
+```
+
+```bash
+npm run wonder -- telegram        # run just the control bot
+npm run wonder -- start --deploy  # daemon + notifications + bot together
+```
+
+Without a token everything still works — notifications are silent no-ops.
+
 ## Roadmap
 
 - **Phase 1 ✅** read-only screening.
@@ -154,7 +171,9 @@ conservatively evolves a screening threshold and notes why.
 - **Phase 3b ✅** LLM ReAct agent (screener / manager / general) over the same tools,
   provider-agnostic (OpenRouter / local / OpenAI).
 - **Phase 4a ✅** autonomous daemon (manage + screen loops) + learning/evolution.
-- **Phase 4b** Telegram control (notifications + commands), then go-live guardrails.
+- **Phase 4b ✅** Telegram control (notifications + command bot).
+- **Next** go-live guardrails: tighten `amountXMin/YMin`, per-position approval limits,
+  before flipping `DRY_RUN=false`.
 
 > ⚠️ **Before go-live (`DRY_RUN=false`):** `amountXMin/YMin` on add are set to a flat
 > slippage and on remove to `0` — tighten these (derive from live reserves) and add

@@ -26,6 +26,7 @@ import { llmAvailable } from "./llm";
 import type { Role } from "./agent/tools";
 import { recordClose, getLessons, getPerformanceSummary } from "./lessons";
 import { runDaemon } from "./daemon";
+import { startTelegram, telegramAvailable } from "./telegram";
 import { fmtUsd, fmtPct } from "./util/num";
 import { EXPLORER_URL, CHAIN_ID, NATIVE_SYMBOL, WMON } from "./constants";
 import type { Candidate, Strategy } from "./types";
@@ -468,6 +469,18 @@ function cmdLessons(args: Record<string, string | boolean>) {
   console.log(`\n  Performance: ${perf.closes} closes, ${perf.evaluated} evaluated, win ${perf.winRatePct != null ? perf.winRatePct.toFixed(0) + "%" : "—"}, avg ${perf.avgPnlPct != null ? perf.avgPnlPct.toFixed(1) + "%" : "—"}\n`);
 }
 
+async function cmdTelegram() {
+  if (!telegramAvailable()) {
+    console.log(
+      "\n⚠️  No TELEGRAM_BOT_TOKEN set. Add it to .env (and TELEGRAM_CHAT_ID for notifications,\n" +
+        "    TELEGRAM_ALLOWED_USER_IDS to lock down commands), then re-run.\n",
+    );
+    process.exit(1);
+  }
+  console.log("\n📱 Telegram control bot starting (Ctrl+C to stop)…\n");
+  await startTelegram();
+}
+
 function cmdPerformance(args: Record<string, string | boolean>) {
   const perf = getPerformanceSummary();
   if (args.json) {
@@ -513,6 +526,7 @@ Autonomous runtime + learning (Phase 4):
   start [--once] [--deploy]                                    Run the daemon (manage + screen loops)
   lessons [--json]                                             Lessons learned from closed positions
   performance [--json]                                         Win rate / avg PnL summary
+  telegram                                                     Run the Telegram control bot (needs TELEGRAM_BOT_TOKEN)
 
   help                                                         This message
 
@@ -572,6 +586,9 @@ async function main() {
         break;
       case "performance":
         cmdPerformance(args);
+        break;
+      case "telegram":
+        await cmdTelegram();
         break;
       case "help":
       case undefined:

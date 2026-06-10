@@ -92,6 +92,16 @@ export const config = {
     maxPositions: u.maxPositions ?? 3, // screen cycle won't open beyond this
   },
 
+  // ─── Telegram control (Phase 4b) ──────────────────────────────────
+  telegram: {
+    token: process.env.TELEGRAM_BOT_TOKEN || u.telegramToken || "",
+    chatId: process.env.TELEGRAM_CHAT_ID || (u.telegramChatId != null ? String(u.telegramChatId) : ""),
+    allowedUserIds: String(process.env.TELEGRAM_ALLOWED_USER_IDS || u.telegramAllowedUserIds || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
+
   // ─── Scheduler (Phase 4) ──────────────────────────────────────────
   schedule: {
     managementIntervalMin: u.managementIntervalMin ?? 10,
